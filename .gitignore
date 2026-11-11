@@ -1,0 +1,7 @@
+# WorkBuddy project metadata — local only, never publish
+.workbuddy-ai/
+
+# macOS / Python noise
+.DS_Store
+__pycache__/
+*.pyc
