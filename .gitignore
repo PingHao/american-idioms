@@ -5,3 +5,7 @@
 .DS_Store
 __pycache__/
 *.pyc
+
+# Large raw AI-generation sources stay local; only the optimised WebP assets ship
+art/final/
+art/samples/
