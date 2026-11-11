@@ -13,7 +13,8 @@ ART_DIR = Path(__file__).with_name("art") / "web"
 
 html = ROOT.read_text(encoding="utf-8")
 if 'id="illustrated"' in html:
-    raise SystemExit("Already applied. Restore index.html from /tmp/idiom-atlas-base.html first.")
+    raise SystemExit("Already applied. Restore index.html from /tmp/idiom-atlas-base.html first, "
+                    "then run build_data.py followed by apply_fixes.py for the current build.")
 
 art = {}
 for p in sorted(ART_DIR.glob("*.webp")):

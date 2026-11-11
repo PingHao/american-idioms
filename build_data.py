@@ -11,6 +11,13 @@ all. This parser handles those cases, then enriches every entry with:
              definition complexity and culture-specific references
   words    - phrase length, for sorting
   note     - 'editor' where a definition was supplied/completed by the editor
+  example  - a usage sentence for the curated Essentials set
+  curated  - True for the 50 hand-written ESL essentials
+  alts     - extra senses preserved when duplicate source entries are merged
+
+Run this after changing the source markdown. It rewrites both idioms.json and the
+embedded <script id="idiom-data"> block in index.html; the artwork payload and
+all CSS/JS in the page are left untouched.
 """
 import json
 import re
@@ -95,6 +102,168 @@ EDITOR_DEFS = {
     2390: "a hidden plan, trick or advantage kept ready to use",
     2585: "suffering setbacks but still carrying on and functioning",
 }
+
+# ---------------------------------------------------------------------------
+# Essentials: a curated ESL layer written for this site. The source book omits
+# many very common idioms and provides no example sentences at all. Each entry
+# below has a plain-English meaning plus a usage example. If the idiom already
+# exists in the source we enrich that record rather than adding a duplicate
+# card; otherwise we add a new record with an id >= 9000.
+# Format: (term, meaning, example, primary topic, second topic, level)
+# ---------------------------------------------------------------------------
+CURATED = [
+    ("A blessing in disguise", "something that seems unlucky at first but turns out to be good",
+     "Missing the train was a blessing in disguise: I met an old friend on the next one.",
+     "Success & Failure", "Feelings & Mood", 1),
+    ("Add insult to injury", "to make a bad situation even worse",
+     "I missed the bus, and to add insult to injury it started raining.",
+     "Feelings & Mood", "Success & Failure", 1),
+    ("Back to square one", "to have to start all over again because a plan failed",
+     "The client rejected the design, so we are back to square one.",
+     "Work & Business", "Success & Failure", 1),
+    ("Better late than never", "it is better to do something late than not do it at all",
+     "He finally apologised, but better late than never.",
+     "Time & Speed", "Everyday Expressions", 1),
+    ("Bite the bullet", "to force yourself to do something difficult or unpleasant",
+     "I hate going to the dentist, but I just have to bite the bullet.",
+     "Feelings & Mood", "Mind & Ideas", 2),
+    ("Break the ice", "to say something friendly that helps people relax when they first meet",
+     "Our teacher told a joke to break the ice on the first day of class.",
+     "Talk & Truth", "Friends & Family", 1),
+    ("Burn the midnight oil", "to work or study very late into the night",
+     "She burned the midnight oil to finish her thesis before the deadline.",
+     "Work & Business", "Time & Speed", 2),
+    ("By the book", "exactly following the rules or official procedure",
+     "The inspector does everything by the book, so do not expect any shortcuts.",
+     "Work & Business", "People & Character", 2),
+    ("Call it a day", "to stop working on something and finish for now",
+     "We have planted enough trees; let's call it a day.",
+     "Work & Business", "Time & Speed", 1),
+    ("Cost an arm and a leg", "to be extremely expensive",
+     "That laptop costs an arm and a leg, so I am waiting for a sale.",
+     "Money & Value", "Everyday Expressions", 1),
+    ("Cut corners", "to do something quickly and cheaply by skipping important steps",
+     "Do not cut corners on the wiring just to save a little money.",
+     "Work & Business", "Money & Value", 1),
+    ("Cut to the chase", "to stop giving background details and say the main point",
+     "Let me cut to the chase: we cannot afford this project.",
+     "Talk & Truth", "Work & Business", 1),
+    ("Down to earth", "practical, sensible and easy to talk to",
+     "Despite being famous, she is completely down to earth.",
+     "People & Character", "Feelings & Mood", 1),
+    ("Face the music", "to accept criticism or punishment for something you did wrong",
+     "He broke the window and then had to face the music.",
+     "Feelings & Mood", "People & Character", 2),
+    ("Get a taste of your own medicine", "to be treated the same bad way you have treated others",
+     "You ignored my calls for weeks, so now you are getting a taste of your own medicine.",
+     "People & Character", "Talk & Truth", 2),
+    ("Get out of hand", "to become impossible to control",
+     "The argument got out of hand and the teacher had to step in.",
+     "Feelings & Mood", "Talk & Truth", 1),
+    ("Get the hang of it", "to learn how to do something after some practice",
+     "Driving on the left felt strange, but I got the hang of it after a week.",
+     "Mind & Ideas", "Everyday Expressions", 1),
+    ("Give someone the benefit of the doubt", "to believe someone is probably honest even when you are not sure",
+     "I will give him the benefit of the doubt and assume the email got lost.",
+     "People & Character", "Talk & Truth", 2),
+    ("Go the extra mile", "to make more effort than is normally expected",
+     "The nurse really went the extra mile to make my grandmother comfortable.",
+     "Work & Business", "People & Character", 1),
+    ("Hang in there", "to keep trying and not give up during a hard time",
+     "I know the course is difficult, but hang in there - it gets easier.",
+     "Feelings & Mood", "Success & Failure", 1),
+    ("Hit the books", "to start studying hard",
+     "I have an exam on Monday, so I need to hit the books this weekend.",
+     "Mind & Ideas", "Work & Business", 1),
+    ("Hit the nail on the head", "to describe a problem or situation exactly right",
+     "You hit the nail on the head: the real issue is the deadline, not the budget.",
+     "Talk & Truth", "Mind & Ideas", 1),
+    ("Hit the sack", "to go to bed",
+     "It is almost midnight; I am going to hit the sack.",
+     "Health & Body", "Time & Speed", 1),
+    ("In the nick of time", "just before it is too late",
+     "We reached the station in the nick of time - the train left a minute later.",
+     "Time & Speed", "Everyday Expressions", 1),
+    ("Keep an eye on", "to watch someone or something carefully",
+     "Could you keep an eye on the soup while I answer the door?",
+     "Everyday Expressions", "Mind & Ideas", 1),
+    ("Keep your chin up", "to stay cheerful when things are going badly",
+     "Keep your chin up; you will find a new job soon.",
+     "Feelings & Mood", "Friends & Family", 1),
+    ("Kill two birds with one stone", "to solve two problems with a single action",
+     "I killed two birds with one stone by visiting my parents and picking up the parcel on the same trip.",
+     "Success & Failure", "Work & Business", 1),
+    ("Let sleeping dogs lie", "to avoid bringing up an old problem that is now quiet",
+     "The argument was settled months ago; let's let sleeping dogs lie.",
+     "Talk & Truth", "Animals & Weather", 2),
+    ("Let the cat out of the bag", "to reveal a secret, often by accident",
+     "I let the cat out of the bag and told her about the surprise party.",
+     "Talk & Truth", "Everyday Expressions", 1),
+    ("Look on the bright side", "to think about the good part of a bad situation",
+     "Look on the bright side: at least nobody was hurt.",
+     "Feelings & Mood", "Mind & Ideas", 1),
+    ("Miss the boat", "to miss a chance because you acted too slowly",
+     "The tickets sold out yesterday, so I am afraid we missed the boat.",
+     "Time & Speed", "Success & Failure", 1),
+    ("Once in a blue moon", "very rarely",
+     "I only eat fast food once in a blue moon.",
+     "Time & Speed", "Everyday Expressions", 1),
+    ("On the fence", "unable or unwilling to choose a side",
+     "She is still on the fence about which university to attend.",
+     "Mind & Ideas", "Success & Failure", 1),
+    ("On the same page", "in agreement and sharing the same understanding",
+     "Let's meet before the launch so everyone is on the same page.",
+     "Talk & Truth", "Work & Business", 1),
+    ("Out of the blue", "completely unexpectedly, without any warning",
+     "Out of the blue, an old classmate called me after ten years.",
+     "Time & Speed", "Feelings & Mood", 1),
+    ("Piece of cake", "very easy to do",
+     "The quiz was a piece of cake - I finished in five minutes.",
+     "Success & Failure", "Everyday Expressions", 1),
+    ("Pull someone's leg", "to tease someone by telling them something untrue as a joke",
+     "Relax, I am just pulling your leg; there is no exam today.",
+     "Talk & Truth", "Friends & Family", 1),
+    ("Raining cats and dogs", "raining very heavily",
+     "We stayed inside because it was raining cats and dogs.",
+     "Animals & Weather", "Everyday Expressions", 1),
+    ("See eye to eye", "to agree completely with someone",
+     "My brother and I do not always see eye to eye on politics.",
+     "Friends & Family", "Talk & Truth", 1),
+    ("Speak of the devil", "said when the person you were just talking about appears",
+     "Speak of the devil! We were just saying you should join us.",
+     "Talk & Truth", "Everyday Expressions", 1),
+    ("Spill the beans", "to tell a secret that should have been kept",
+     "Come on, spill the beans - who is getting married?",
+     "Talk & Truth", "Everyday Expressions", 1),
+    ("Take it easy", "to relax and avoid stress",
+     "You have been working all week; take it easy this weekend.",
+     "Health & Body", "Feelings & Mood", 1),
+    ("Take it with a grain of salt", "to not fully believe something because it may be exaggerated",
+     "He always exaggerates, so take his story with a grain of salt.",
+     "Mind & Ideas", "Talk & Truth", 2),
+    ("The ball is in your court", "it is your turn to make the next decision or move",
+     "I have sent you the offer, so the ball is in your court.",
+     "Sports & Games", "Work & Business", 2),
+    ("The last straw", "the final small problem that makes you lose patience",
+     "The train was late again, and that was the last straw.",
+     "Feelings & Mood", "Success & Failure", 1),
+    ("The tip of the iceberg", "only a small visible part of a much bigger problem",
+     "These three complaints are just the tip of the iceberg.",
+     "Mind & Ideas", "Work & Business", 2),
+    ("Through thick and thin", "in good times and bad times, staying loyal",
+     "They have been friends through thick and thin for thirty years.",
+     "Friends & Family", "People & Character", 2),
+    ("Under the weather", "slightly ill or not feeling well",
+     "I am feeling a bit under the weather, so I will stay home today.",
+     "Health & Body", "Everyday Expressions", 1),
+    ("Up in the air", "not yet decided or settled",
+     "Our summer plans are still up in the air.",
+     "Mind & Ideas", "Time & Speed", 1),
+    ("Wrap your head around", "to manage to understand something complicated",
+     "It took me a while to wrap my head around the new tax rules.",
+     "Mind & Ideas", "Work & Business", 2),
+]
+assert len(CURATED) == 50, f"expected 50 essentials, got {len(CURATED)}"
 
 # ---------------------------------------------------------------------------
 # Topic classification. Each topic has distinctive (weight 3) and supporting
@@ -305,6 +474,72 @@ for r in records:
     r["level"] = 1 if r["score"] < low else (2 if r["score"] < high else 3)
     del r["score"]
 
+
+def norm_key(term: str) -> str:
+    """Case/punctuation-insensitive key for merging and curated matching."""
+    t = term.lower().replace("\u2019", "'").replace("\u2018", "'")
+    t = re.sub(r"[^a-z0-9' ]+", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+# --- Merge duplicate source entries -----------------------------------------
+# The book lists several idioms twice with slightly different glosses. Keep one
+# card and preserve the other senses in `alts` so nothing is lost.
+source_count = len(records)
+merged, seen = [], {}
+for r in records:
+    k = norm_key(r["term"])
+    if k in seen:
+        first = seen[k]
+        other = r["def"].strip()
+        if other and other.lower() != first["def"].lower():
+            first.setdefault("alts", []).append(other)
+        for t in r["cats"]:
+            if t not in first["cats"]:
+                first["cats"].append(t)
+        continue
+    seen[k] = r
+    merged.append(r)
+records = merged
+merged_away = source_count - len(records)
+
+# --- Curated Essentials ------------------------------------------------------
+valid_topics = {name for name, _, _ in TOPICS} | {FALLBACK}
+for term, _meaning, _example, c1, c2, _level in CURATED:
+    assert c1 in valid_topics and (c2 is None or c2 in valid_topics), term
+
+by_term = {norm_key(r["term"]): r for r in records}
+new_records = []
+next_id = 9000
+for term, meaning, example, c1, c2, level in CURATED:
+    cats = [c1] + ([c2] if c2 else [])
+    r = by_term.get(norm_key(term))
+    if r is None:
+        next_id += 1
+        ch = term[0].upper() if term else "#"
+        r = {
+            "id": next_id,
+            "term": term,
+            "def": meaning,
+            "cat": c1,
+            "cats": cats,
+            "level": level,
+            "letter": ch if "A" <= ch <= "Z" else "#",
+            "words": len(re.findall(r"[A-Za-z0-9']+", term)),
+            "note": "",
+            "src": "essentials",
+        }
+        by_term[norm_key(term)] = r
+        new_records.append(r)
+    else:
+        r["def"] = meaning
+        r["cat"] = c1
+        r["cats"] = cats
+        r["level"] = level
+    r["example"] = example
+    r["curated"] = True
+records.extend(new_records)
+
 payload = json.dumps(records, ensure_ascii=False, separators=(",", ":"))
 OUT.write_text(payload, encoding="utf-8")
 
@@ -330,3 +565,9 @@ for k, v in primary_counts.most_common():
     print(f"  {k:<24} {v:>5} / {tag_counts[k]}")
 print("letters:", dict(sorted(Counter(r["letter"] for r in records).items())))
 print("editor-completed:", sum(1 for r in records if r["note"]))
+print("duplicate source entries merged away:", merged_away)
+print("essentials:", sum(1 for r in records if r.get("curated")),
+      "(", len(new_records), "new idioms, ",
+      len(CURATED) - len(new_records), "existing ones enriched )")
+print("records with an example:", sum(1 for r in records if r.get("example")))
+print("records with alternate senses:", sum(1 for r in records if r.get("alts")))
